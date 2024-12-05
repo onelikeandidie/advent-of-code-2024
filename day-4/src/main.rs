@@ -100,7 +100,7 @@ impl TileMap {
         Some(words)
     }
 
-    fn find_xes(&self, x: i64, y: i64, search: &str) -> Option<()> {
+    fn find_exes(&self, x: i64, y: i64, search: &str) -> Option<()> {
         let search_length = search.len();
         // if word to search has a even number of characters, it's not
         // searchable as an x word
@@ -111,8 +111,25 @@ impl TileMap {
         let half_point_in_word = (search.len() / 2) as i64;
         let start_offset = 0 - half_point_in_word;
         let end_offset = (search.len() as i64 - 1) - half_point_in_word;
-        for directions in X_DIRECTIONS {
-            for offset in start_offset..=end_offset {}
+        let mut found_word = false;
+        for direction in X_DIRECTIONS {
+            let mut word = "".to_string();
+            for offset in start_offset..=end_offset {
+                let search_pos = Vec2::new(x + (offset * direction.x), y + (offset * direction.y));
+                let search_tile = self.get(search_pos.x, search_pos.y);
+                match search_tile {
+                    Some(tile) => {
+                        word.push(tile.c);
+                    }
+                    None => break, // no point in searching this direction anymore
+                }
+            }
+            if word == search {
+                if found_word == true {
+                    return Some(());
+                }
+                found_word = true;
+            }
         }
         None
     }
@@ -233,7 +250,7 @@ impl Solver {
                 let mut xes = 0;
                 for y in 0..map.height {
                     for x in 0..map.width {
-                        let found_xes = map.find_xes(x as i64, y as i64, SEARCH_X);
+                        let found_xes = map.find_exes(x as i64, y as i64, SEARCH_X);
                         // todo!("{:?}", found_words);
                         if found_xes.is_none() {
                             continue;
