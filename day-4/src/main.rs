@@ -31,7 +31,7 @@ const SEARCH_DIRECTIONS: [Vec2; 8] = [
 ];
 
 #[rustfmt::skip]
-const SEARCH_DIRECTIONS: [Vec2; 4] = [
+const X_DIRECTIONS: [Vec2; 4] = [
     Vec2 { x: -1, y: -1 }, /* --------------- */ Vec2 { x: 1, y: -1 },
     /* ---------------- */ /* --------------- */ /* --------------- */
     Vec2 { x: -1, y: 1  }, /* --------------- */ Vec2 { x: 1, y: 1  },
