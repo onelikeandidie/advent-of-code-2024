@@ -1,5 +1,9 @@
 use core::panic;
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    sync::{mpsc, Arc, Mutex},
+    thread,
+};
 
 use clap::Parser;
 
@@ -201,11 +205,16 @@ impl Vec2 {
 }
 
 impl Solver {
-    pub fn solve(&self, input: String, threads: usize) -> String {
+    pub fn solve(&self, input: String, thread_count: usize) -> String {
+        let map = TileMap::from(input);
+        if map.height > 32 {
+            println!("Map height too large, ommiting output");
+        } else {
+            println!("{}", map);
+        }
         match self {
             Solver::Part1 => {
-                let mut map = TileMap::from(input);
-                println!("{}", map);
+                let mut map = map.clone();
                 let mut visited_positions = Vec::new();
                 loop {
                     let tile_in_front = map.get(
@@ -233,8 +242,6 @@ impl Solver {
                 // The second part, we have to put a temporary obstacle on
                 // the map and check if the guard loops. If it loops, add it
                 // to the list
-                let map = TileMap::from(input);
-                println!("{}", map);
                 // Create a map of all spots
                 let spots_to_check = (0..map.height)
                     .map(|y| {
@@ -293,7 +300,143 @@ impl Solver {
                 loop_spots.len().to_string()
             }
             Solver::Part2MultiThread => {
-                todo!("Multi-threading not implemented")
+                // The second part, we have to put a temporary obstacle on
+                // the map and check if the guard loops. If it loops, add it
+                // to the list
+                // Create a map of all spots
+                let spots_to_check = (0..map.height)
+                    .map(|y| {
+                        (0..map.width)
+                            .map(|x| (x as i64, y as i64))
+                            .collect::<Vec<(i64, i64)>>()
+                    })
+                    .flatten()
+                    .map(|(x, y)| Vec2::new(x, y))
+                    // Get all the spots that are not occupied with an obstacle
+                    .filter(|pos| {
+                        !map.get(pos.x, pos.y)
+                            .expect(format!("Could not get tile at pos: {:?}", pos).as_str())
+                            .obstacle
+                    })
+                    .filter(|pos| &map.guard.position != pos)
+                    .collect::<Vec<Vec2>>();
+                // Setup communication between spawned threads and the main thread
+                let (tx, rx) = mpsc::channel();
+                // Make the result a shared memory mutex so it can be shared across threads
+                // let loop_spots: Arc<Mutex<Vec<Vec2>>> = Arc::new(Mutex::new(Vec::new()));
+                let spots_count = spots_to_check.len();
+                // Divide the spots into equal amounts to use in each thread
+                // To avoid a number of chunks bigger than threads, we divide
+                // by +1 to make sure we don't have an extra chunk with 1 element
+                let chunks = spots_to_check
+                    .chunks(spots_count / thread_count + 1)
+                    .map(|chunk| Vec::from(chunk));
+                // let threads = chunks.enumerate().map(|(thread_index, chunk)| {
+                for (thread_index, chunk) in chunks.enumerate() {
+                    // Clone variables to use inside thread
+                    // let outer_loop_spots = loop_spots.clone();
+                    let map = map.clone();
+                    let chunk = chunk.clone();
+                    let tx = tx.clone();
+                    thread::spawn(move || {
+                        println!("Thead {}", thread_index);
+                        let mut loop_spots: Vec<Vec2> = Vec::new();
+                        let mut iter = chunk.iter();
+                        while let Some(spot_to_check) = iter.next() {
+                            println!("Checking for position: {:?}", spot_to_check);
+                            let mut map = map.clone();
+                            {
+                                let modified_tile =
+                                    map.get_mut(spot_to_check.x, spot_to_check.y).unwrap();
+                                modified_tile.obstacle = true;
+                            }
+                            let mut visited_positions = Vec::new();
+                            loop {
+                                let tile_in_front = map.get(
+                                    map.guard.position.x + map.guard.looking_at.x,
+                                    map.guard.position.y + map.guard.looking_at.y,
+                                );
+                                if tile_in_front.is_none() {
+                                    break;
+                                }
+                                let tile_in_front = tile_in_front.unwrap();
+                                if !visited_positions
+                                    .contains(&(map.guard.position, map.guard.looking_at))
+                                {
+                                    visited_positions
+                                        .push((map.guard.position, map.guard.looking_at));
+                                } else {
+                                    println!("This looped");
+                                    loop_spots.push(spot_to_check.clone());
+                                    // {
+                                    //     let mut outer_loop_spots = outer_loop_spots.lock().unwrap();
+                                    //     outer_loop_spots.push(*spot_to_check);
+                                    // }
+                                    break;
+                                }
+                                if tile_in_front.obstacle {
+                                    map.guard.turn_right();
+                                } else {
+                                    map.guard.position.x += map.guard.looking_at.x;
+                                    map.guard.position.y += map.guard.looking_at.y;
+                                }
+                            }
+                        }
+                        tx.send(loop_spots.len()).unwrap();
+                    });
+                }
+                // });
+                // Wait for all threads to finish processing
+                // let mut loop_spots: Vec<Vec2> = Vec::new();
+                let mut loop_spots = 0;
+                for _ in 0..thread_count {
+                    let result = rx.recv().unwrap();
+                    // loop_spots.append(&mut result);
+                    loop_spots += result;
+                }
+                // for t in threads {
+                //     t.join().unwrap();
+                // }
+                // threads.into_iter().for_each(|t| t.join().unwrap());
+                loop_spots.to_string()
+                // let mut iter = spots_to_check.iter();
+                // while let Some(spot_to_check) = iter.next() {
+                //     let mut visited_positions = Vec::new();
+                //     println!("Checking for position: {:?}", spot_to_check);
+                //     let mut map = map.clone();
+                //     {
+                //         let modified_tile = map.get_mut(spot_to_check.x, spot_to_check.y).unwrap();
+                //         modified_tile.obstacle = true;
+                //     }
+
+                //     loop {
+                //         let tile_in_front = map.get(
+                //             map.guard.position.x + map.guard.looking_at.x,
+                //             map.guard.position.y + map.guard.looking_at.y,
+                //         );
+                //         if tile_in_front.is_none() {
+                //             break;
+                //         }
+                //         let tile_in_front = tile_in_front.unwrap();
+                //         if !visited_positions.contains(&(map.guard.position, map.guard.looking_at))
+                //         {
+                //             visited_positions.push((map.guard.position, map.guard.looking_at));
+                //         } else {
+                //             // This should mean the guard has looped
+                //             println!("This looped");
+                //             loop_spots.push(spot_to_check);
+                //             break;
+                //         }
+                //         if tile_in_front.obstacle {
+                //             map.guard.turn_right();
+                //         } else {
+                //             map.guard.position.x += map.guard.looking_at.x;
+                //             map.guard.position.y += map.guard.looking_at.y;
+                //         }
+                //     }
+                // }
+                // println!("{}", map);
+                // loop_spots.len().to_string()
             }
         }
     }
@@ -304,7 +447,11 @@ fn main() {
     let input = args.path;
     println!("{:?}", input);
     let contents = std::fs::read_to_string(input).unwrap();
-    println!("{}", contents);
+    if contents.lines().count() > 32 {
+        println!("Input contents too long, ommitting output");
+    } else {
+        println!("{}", contents);
+    }
     let result = args.solver.solve(contents, args.threads);
     println!("{}", result);
 }
