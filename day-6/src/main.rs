@@ -1,9 +1,5 @@
 use core::panic;
-use std::{
-    fmt::Display,
-    sync::{mpsc, Arc, Mutex},
-    thread,
-};
+use std::{fmt::Display, sync::mpsc, thread};
 
 use clap::Parser;
 
@@ -33,7 +29,6 @@ const GUARD_DIRECTION_CHARS: [char; 4] = ['^', '>', 'v', '<'];
 #[derive(Debug, Clone)]
 struct TileMap {
     tiles: Vec<Tile>,
-    // obstacles: Vec<Obstacle>,
     guard: Guard,
     width: usize,
     height: usize,
@@ -322,8 +317,6 @@ impl Solver {
                     .collect::<Vec<Vec2>>();
                 // Setup communication between spawned threads and the main thread
                 let (tx, rx) = mpsc::channel();
-                // Make the result a shared memory mutex so it can be shared across threads
-                // let loop_spots: Arc<Mutex<Vec<Vec2>>> = Arc::new(Mutex::new(Vec::new()));
                 let spots_count = spots_to_check.len();
                 // Divide the spots into equal amounts to use in each thread
                 // To avoid a number of chunks bigger than threads, we divide
