@@ -12,17 +12,21 @@ struct Args {
     /// Solver
     #[arg(short, long, value_enum)]
     solver: Solver,
+    // Threads for the part 2 multi-threaded brute force solver
+    #[arg(short, long, default_value_t = 1)]
+    threads: usize,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
 enum Solver {
     Part1,
     Part2,
+    Part2MultiThread,
 }
 
 const GUARD_DIRECTION_CHARS: [char; 4] = ['^', '>', 'v', '<'];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TileMap {
     tiles: Vec<Tile>,
     // obstacles: Vec<Obstacle>,
@@ -40,6 +44,16 @@ impl TileMap {
         let y = y as usize;
         let y_offset = y * self.width;
         self.tiles.get(y_offset + x).cloned()
+    }
+
+    fn get_mut(&mut self, x: i64, y: i64) -> Option<&mut Tile> {
+        if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
+            return None;
+        }
+        let x = x as usize;
+        let y = y as usize;
+        let y_offset = y * self.width;
+        self.tiles.get_mut(y_offset + x)
     }
 }
 
@@ -187,7 +201,7 @@ impl Vec2 {
 }
 
 impl Solver {
-    pub fn solve(&self, input: String) -> String {
+    pub fn solve(&self, input: String, threads: usize) -> String {
         match self {
             Solver::Part1 => {
                 let mut map = TileMap::from(input);
@@ -216,30 +230,70 @@ impl Solver {
                 (visited_positions.len() + 1).to_string()
             }
             Solver::Part2 => {
-                let mut map = TileMap::from(input);
+                // The second part, we have to put a temporary obstacle on
+                // the map and check if the guard loops. If it loops, add it
+                // to the list
+                let map = TileMap::from(input);
                 println!("{}", map);
-                let mut visited_positions = Vec::new();
-                loop {
-                    let tile_in_front = map.get(
-                        map.guard.position.x + map.guard.looking_at.x,
-                        map.guard.position.y + map.guard.looking_at.y,
-                    );
-                    if tile_in_front.is_none() {
-                        break;
+                // Create a map of all spots
+                let spots_to_check = (0..map.height)
+                    .map(|y| {
+                        (0..map.width)
+                            .map(|x| (x as i64, y as i64))
+                            .collect::<Vec<(i64, i64)>>()
+                    })
+                    .flatten()
+                    .map(|(x, y)| Vec2::new(x, y))
+                    // Get all the spots that are not occupied with an obstacle
+                    .filter(|pos| {
+                        !map.get(pos.x, pos.y)
+                            .expect(format!("Could not get tile at pos: {:?}", pos).as_str())
+                            .obstacle
+                    })
+                    .filter(|pos| &map.guard.position != pos)
+                    .collect::<Vec<Vec2>>();
+                let mut loop_spots = Vec::new();
+                let mut iter = spots_to_check.iter();
+                while let Some(spot_to_check) = iter.next() {
+                    let mut visited_positions = Vec::new();
+                    println!("Checking for position: {:?}", spot_to_check);
+                    let mut map = map.clone();
+                    {
+                        let modified_tile = map.get_mut(spot_to_check.x, spot_to_check.y).unwrap();
+                        modified_tile.obstacle = true;
                     }
-                    let tile_in_front = tile_in_front.unwrap();
-                    if !visited_positions.contains(&map.guard.position) {
-                        visited_positions.push(map.guard.position);
-                    }
-                    if tile_in_front.obstacle {
-                        map.guard.turn_right();
-                    } else {
-                        map.guard.position.x += map.guard.looking_at.x;
-                        map.guard.position.y += map.guard.looking_at.y;
+
+                    loop {
+                        let tile_in_front = map.get(
+                            map.guard.position.x + map.guard.looking_at.x,
+                            map.guard.position.y + map.guard.looking_at.y,
+                        );
+                        if tile_in_front.is_none() {
+                            break;
+                        }
+                        let tile_in_front = tile_in_front.unwrap();
+                        if !visited_positions.contains(&(map.guard.position, map.guard.looking_at))
+                        {
+                            visited_positions.push((map.guard.position, map.guard.looking_at));
+                        } else {
+                            // This should mean the guard has looped
+                            println!("This looped");
+                            loop_spots.push(spot_to_check);
+                            break;
+                        }
+                        if tile_in_front.obstacle {
+                            map.guard.turn_right();
+                        } else {
+                            map.guard.position.x += map.guard.looking_at.x;
+                            map.guard.position.y += map.guard.looking_at.y;
+                        }
                     }
                 }
                 println!("{}", map);
-                (visited_positions.len() + 1).to_string()
+                loop_spots.len().to_string()
+            }
+            Solver::Part2MultiThread => {
+                todo!("Multi-threading not implemented")
             }
         }
     }
@@ -251,6 +305,6 @@ fn main() {
     println!("{:?}", input);
     let contents = std::fs::read_to_string(input).unwrap();
     println!("{}", contents);
-    let result = args.solver.solve(contents);
+    let result = args.solver.solve(contents, args.threads);
     println!("{}", result);
 }
