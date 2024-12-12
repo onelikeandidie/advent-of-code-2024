@@ -331,10 +331,8 @@ impl Solver {
                 let chunks = spots_to_check
                     .chunks(spots_count / thread_count + 1)
                     .map(|chunk| Vec::from(chunk));
-                // let threads = chunks.enumerate().map(|(thread_index, chunk)| {
                 for (thread_index, chunk) in chunks.enumerate() {
                     // Clone variables to use inside thread
-                    // let outer_loop_spots = loop_spots.clone();
                     let map = map.clone();
                     let chunk = chunk.clone();
                     let tx = tx.clone();
@@ -368,10 +366,6 @@ impl Solver {
                                 } else {
                                     println!("This looped");
                                     loop_spots.push(spot_to_check.clone());
-                                    // {
-                                    //     let mut outer_loop_spots = outer_loop_spots.lock().unwrap();
-                                    //     outer_loop_spots.push(*spot_to_check);
-                                    // }
                                     break;
                                 }
                                 if tile_in_front.obstacle {
@@ -385,58 +379,13 @@ impl Solver {
                         tx.send(loop_spots.len()).unwrap();
                     });
                 }
-                // });
                 // Wait for all threads to finish processing
-                // let mut loop_spots: Vec<Vec2> = Vec::new();
                 let mut loop_spots = 0;
                 for _ in 0..thread_count {
                     let result = rx.recv().unwrap();
-                    // loop_spots.append(&mut result);
                     loop_spots += result;
                 }
-                // for t in threads {
-                //     t.join().unwrap();
-                // }
-                // threads.into_iter().for_each(|t| t.join().unwrap());
                 loop_spots.to_string()
-                // let mut iter = spots_to_check.iter();
-                // while let Some(spot_to_check) = iter.next() {
-                //     let mut visited_positions = Vec::new();
-                //     println!("Checking for position: {:?}", spot_to_check);
-                //     let mut map = map.clone();
-                //     {
-                //         let modified_tile = map.get_mut(spot_to_check.x, spot_to_check.y).unwrap();
-                //         modified_tile.obstacle = true;
-                //     }
-
-                //     loop {
-                //         let tile_in_front = map.get(
-                //             map.guard.position.x + map.guard.looking_at.x,
-                //             map.guard.position.y + map.guard.looking_at.y,
-                //         );
-                //         if tile_in_front.is_none() {
-                //             break;
-                //         }
-                //         let tile_in_front = tile_in_front.unwrap();
-                //         if !visited_positions.contains(&(map.guard.position, map.guard.looking_at))
-                //         {
-                //             visited_positions.push((map.guard.position, map.guard.looking_at));
-                //         } else {
-                //             // This should mean the guard has looped
-                //             println!("This looped");
-                //             loop_spots.push(spot_to_check);
-                //             break;
-                //         }
-                //         if tile_in_front.obstacle {
-                //             map.guard.turn_right();
-                //         } else {
-                //             map.guard.position.x += map.guard.looking_at.x;
-                //             map.guard.position.y += map.guard.looking_at.y;
-                //         }
-                //     }
-                // }
-                // println!("{}", map);
-                // loop_spots.len().to_string()
             }
         }
     }
