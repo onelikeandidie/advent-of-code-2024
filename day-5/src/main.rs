@@ -113,7 +113,63 @@ impl Solver {
                 result.to_string()
             }
             Solver::Part2 => {
-                let result = 0;
+                let mut result = 0;
+                let rules = OrderRuleList::from(input.clone());
+                // println!("{}", rules.to_string());
+                let page_lists: Vec<Pages> = input
+                    .lines()
+                    .filter(|line| !line.contains("|") && !line.is_empty())
+                    .map(|line| line.split(",").map(|page| page.parse().unwrap()).collect())
+                    .collect();
+                for page_list in page_lists {
+                    // println!(
+                    //     "{}",
+                    //     pages
+                    //         .iter()
+                    //         .map(|page| page.to_string())
+                    //         .collect::<Vec<String>>()
+                    //         .join(",")
+                    // );
+                    println!("Pages {:?}", page_list);
+                    let mut correct = true;
+                    for (index, page) in page_list.iter().enumerate() {
+                        for (other_index, other_page) in page_list.iter().enumerate() {
+                            if page == other_page {
+                                continue;
+                            }
+                            if index > other_index {
+                                continue;
+                            }
+                            println!("Comparing {} with {}", page, other_page);
+                            for OrderRule((left, right)) in rules.0.iter() {
+                                if page == left && other_page == right {
+                                    // We are good
+                                    println!("- Rule {} -> {}", left, right);
+                                    println!("- Correct Order");
+                                }
+                                if page == right && other_page == left {
+                                    correct = false;
+
+                                    println!("- Rule {} -> {}", left, right);
+                                    println!("- Incorrect Order");
+                                    break;
+                                }
+                            }
+                            if !correct {
+                                break;
+                            }
+                        }
+                    }
+                    if correct {
+                        // Get middle number
+                        let index = page_list.len() / 2;
+                        println!("Getting {} for page {:?}", index, page_list);
+                        let middle_page = page_list.get(index);
+                        if let Some(page) = middle_page {
+                            result += page;
+                        }
+                    }
+                }
                 result.to_string()
             }
         }
